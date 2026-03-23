@@ -1,31 +1,25 @@
-# Traefik Route Manager Skill
+---
+name: traefik-route-manager
+description: Use when an AI agent needs to manage Traefik Route Manager routes through its HTTP API, including authenticating, listing routes, and creating, updating, or deleting managed route entries that map domains to backend services.
+---
 
-A skill for AI agents to manage Traefik reverse proxy routes through the Traefik Route Manager API.
+# Traefik Route Manager
 
-## First-Time Setup
+Use this skill to help an AI agent operate a deployed Traefik Route Manager instance over HTTP.
 
-When first using this skill, ask the user for:
+## Setup
 
-1. **Base URL** - The Traefik Route Manager web address (e.g., `https://routes.example.com` or `http://192.168.1.100:8892`)
-2. **Auth Token** - The shared token configured via `AUTH_TOKEN` environment variable
+Collect these values before the first API call:
 
-Save these credentials securely for future use. Do not ask again on subsequent requests.
+1. Base URL for the Traefik Route Manager instance, such as `https://routes.example.com` or `http://192.168.1.100:8892`
+2. Shared auth token configured by the server's `AUTH_TOKEN`
+
+Reuse previously supplied credentials only when the runtime supports secure state or the user explicitly provides them again.
 
 ## Authentication
 
-All API requests (except login) require the `Authorization` header:
+Validate the token with:
 
-```
-Authorization: Bearer <token>
-```
-
-## API Reference
-
-### Login
-
-Validate the auth token.
-
-**Request:**
 ```http
 POST {baseUrl}/api/auth/login
 Content-Type: application/json
@@ -35,59 +29,23 @@ Content-Type: application/json
 }
 ```
 
-**Response (200 OK):**
-```json
-{
-  "success": true
-}
+Send this header on every route request:
+
+```http
+Authorization: Bearer <token>
 ```
 
-**Response (401 Unauthorized):**
-```json
-{
-  "error": "Invalid token"
-}
-```
+## Route Operations
 
----
+List managed routes:
 
-### List Routes
-
-Get all managed routes.
-
-**Request:**
 ```http
 GET {baseUrl}/api/routes
 Authorization: Bearer <token>
 ```
 
-**Response (200 OK):**
-```json
-{
-  "routes": [
-    {
-      "domain": "plex.example.com",
-      "backend": "http://192.168.1.100:32400",
-      "https": true,
-      "redirectHttps": true
-    },
-    {
-      "domain": "home.example.com",
-      "backend": "http://192.168.1.100:5000",
-      "https": false,
-      "redirectHttps": false
-    }
-  ]
-}
-```
+Create a route:
 
----
-
-### Create Route
-
-Create a new route. Returns error if domain already exists.
-
-**Request:**
 ```http
 POST {baseUrl}/api/routes
 Authorization: Bearer <token>
@@ -101,45 +59,8 @@ Content-Type: application/json
 }
 ```
 
-**Fields:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `domain` | string | Yes | The domain name (e.g., `app.example.com`) |
-| `backend` | string | Yes | Backend URL with scheme (e.g., `http://192.168.1.100:3000`) |
-| `https` | boolean | No | Enable HTTPS with Traefik TLS (default: `false`) |
-| `redirectHttps` | boolean | No | Redirect HTTP to HTTPS (requires `https: true`) |
+Update a route by current domain:
 
-**Response (201 Created):**
-```json
-{
-  "domain": "app.example.com",
-  "backend": "http://192.168.1.100:3000",
-  "https": true,
-  "redirectHttps": false
-}
-```
-
-**Response (409 Conflict):**
-```json
-{
-  "error": "route already exists"
-}
-```
-
-**Response (400 Bad Request):**
-```json
-{
-  "error": "domain format is invalid"
-}
-```
-
----
-
-### Update Route
-
-Update an existing route. The `:domain` URL parameter is the current domain name.
-
-**Request:**
 ```http
 PUT {baseUrl}/api/routes/app.example.com
 Authorization: Bearer <token>
@@ -153,97 +74,45 @@ Content-Type: application/json
 }
 ```
 
-**Response (200 OK):**
-```json
-{
-  "domain": "app.example.com",
-  "backend": "http://192.168.1.100:3001",
-  "https": true,
-  "redirectHttps": true
-}
-```
+Delete a route:
 
-**Response (404 Not Found):**
-```json
-{
-  "error": "route not found"
-}
-```
-
----
-
-### Delete Route
-
-Delete a route by domain.
-
-**Request:**
 ```http
 DELETE {baseUrl}/api/routes/app.example.com
 Authorization: Bearer <token>
 ```
 
-**Response (204 No Content):** Empty body on success.
+## Request Rules
 
-**Response (404 Not Found):**
-```json
-{
-  "error": "route not found"
-}
-```
+Use these payload rules when creating or updating routes:
 
-## Usage Examples
+| Field | Type | Required | Rule |
+|-------|------|----------|------|
+| `domain` | string | Yes | Use a valid hostname such as `app.example.com` |
+| `backend` | string | Yes | Include a scheme, such as `http://192.168.1.100:3000` |
+| `https` | boolean | No | Enable TLS routing when `true` |
+| `redirectHttps` | boolean | No | Redirect HTTP to HTTPS; only enable when `https` is also `true` |
 
-### User: "Add a route for my Plex server at plex.home.local pointing to 192.168.1.100:32400"
+## Responses
 
-1. Check if credentials are saved; if not, ask for base URL and token
-2. Create the route:
+Expect these common responses:
 
-```http
-POST {baseUrl}/api/routes
-Authorization: Bearer <token>
-Content-Type: application/json
+- `POST /api/auth/login`: `200` on success, `401` when the token is invalid
+- `GET /api/routes`: `200` with `{"routes":[...]}`
+- `POST /api/routes`: `201` on success, `409` when the domain already exists, `400` on validation failure
+- `PUT /api/routes/:domain`: `200` on success, `404` when the route does not exist
+- `DELETE /api/routes/:domain`: `204` on success, `404` when the route does not exist
 
-{
-  "domain": "plex.home.local",
-  "backend": "http://192.168.1.100:32400",
-  "https": false,
-  "redirectHttps": false
-}
-```
+## Workflow
 
-3. Confirm to user: "Created route for plex.home.local → http://192.168.1.100:32400"
+Follow this sequence for user requests:
 
-### User: "List all my routes"
-
-```http
-GET {baseUrl}/api/routes
-Authorization: Bearer <token>
-```
-
-Return a formatted list to the user.
-
-### User: "Delete the route for old.example.com"
-
-```http
-DELETE {baseUrl}/api/routes/old.example.com
-Authorization: Bearer <token>
-```
-
-Confirm deletion to the user.
+1. Confirm the base URL and auth token if they are not already available in safe runtime state.
+2. Validate the token with `/api/auth/login` when authentication status is unknown.
+3. Choose the matching route endpoint for list, create, update, or delete.
+4. Return a concise summary that includes the domain, backend, and HTTPS behavior after the API call.
 
 ## Notes
 
-- Route files are prefixed with `trm-` (e.g., `trm-plex.example.com.yml`) to avoid conflicts with manual configurations
-- Only routes created through this manager are listed/managed
-- Traefik must be configured to watch the same `CONFIG_DIR` directory for changes to take effect
-- Changes are immediate - no restart required
-
-## Error Handling
-
-| Status Code | Meaning |
-|-------------|---------|
-| 400 | Validation error (invalid domain, backend URL, etc.) |
-| 401 | Invalid or missing auth token |
-| 404 | Route not found |
-| 409 | Route already exists (on create) |
-| 500 | Server error |
+- Manage only routes handled by Traefik Route Manager.
+- Expect managed files to use the `trm-` prefix, such as `trm-plex.example.com.yml`.
+- Expect changes to take effect through Traefik File Provider without a service restart when the target instance is configured correctly.
