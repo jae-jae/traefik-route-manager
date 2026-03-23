@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 41 57% 97%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --primary: 198 93% 46%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 38 92% 95%;
+  --secondary-foreground: 24 10% 10%;
+  --muted: 210 40% 94%;
+  --muted-foreground: 215 16% 40%;
+  --accent: 142 71% 45%;
+  --accent-foreground: 144 61% 12%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 214 32% 88%;
+  --input: 214 32% 88%;
+  --ring: 198 93% 46%;
+  --radius: 1rem;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply min-h-screen bg-background text-foreground antialiased;
+  background-image:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.22), transparent 28%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.16), transparent 22%),
+    linear-gradient(180deg, rgba(255, 251, 235, 0.92), rgba(248, 250, 252, 1));
+}
+
+#root {
+  @apply min-h-screen;
+}
+
+.panel-noise {
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.03) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+.glass {
+  backdrop-filter: blur(18px);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.84));
+}

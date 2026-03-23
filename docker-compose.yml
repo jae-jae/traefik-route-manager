@@ -1,0 +1,14 @@
+services:
+  traefik-route-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: traefik-route-manager:latest
+    ports:
+      - "8892:8892"
+    environment:
+      AUTH_TOKEN: change-this-token
+      CONFIG_DIR: /data
+      ADDR: :8892
+    volumes:
+      - ./data:/data
