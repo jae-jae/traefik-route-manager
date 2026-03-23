@@ -2,6 +2,8 @@
 
 A lightweight, database-free web UI for managing Traefik file provider routes. Think of it as a minimal Nginx Proxy Manager for Traefik.
 
+> 🌟 **Recommended**: [OllaMan](https://ollaman.com/) - Powerful Ollama AI Model Manager.
+
 ![Dashboard Screenshot](docs/screenshot.png)
 ![Dashboard Screenshot](docs/screenshot2.png)
 
