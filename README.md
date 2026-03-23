@@ -1,3 +1,14 @@
+[中文](https://zdoc.app/zh/jae-jae/traefik-route-manager) | 
+[Deutsch](https://zdoc.app/de/jae-jae/traefik-route-manager) | 
+[English](https://zdoc.app/en/jae-jae/traefik-route-manager) | 
+[Español](https://zdoc.app/es/jae-jae/traefik-route-manager) | 
+[français](https://zdoc.app/fr/jae-jae/traefik-route-manager) | 
+[日本語](https://zdoc.app/ja/jae-jae/traefik-route-manager) | 
+[한국어](https://zdoc.app/ko/jae-jae/traefik-route-manager) | 
+[Português](https://zdoc.app/pt/jae-jae/traefik-route-manager) | 
+[Русский](https://zdoc.app/ru/jae-jae/traefik-route-manager)
+
+
 # Traefik Route Manager
 
 A lightweight, database-free web UI for managing Traefik file provider routes. Think of it as a minimal Nginx Proxy Manager for Traefik.
