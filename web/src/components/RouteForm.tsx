@@ -1,7 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { yaml } from "@codemirror/lang-yaml";
-import { createTheme } from "@uiw/codemirror-themes";
+import { oneDark } from "@codemirror/theme-one-dark";
 
 import type { Route } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -32,23 +32,6 @@ const emptyRoute: Route = {
 };
 
 type EditorMode = "visual" | "yaml";
-
-// Dark theme for YAML editor
-const yamlTheme = createTheme({
-  theme: "dark",
-  settings: {
-    background: "#0f172a",
-    foreground: "#e2e8f0",
-    caret: "#f8fafc",
-    selection: "#334155",
-    selectionMatch: "#334155",
-    lineHighlight: "#1e293b",
-    gutterBackground: "#0f172a",
-    gutterForeground: "#64748b",
-    gutterActiveForeground: "#94a3b8",
-  },
-  styles: [],
-});
 
 /**
  * Build Traefik YAML config from Route object (matches backend logic)
@@ -347,7 +330,7 @@ export function RouteForm({
                   value={yamlContent}
                   height="280px"
                   extensions={[yaml()]}
-                  theme={yamlTheme}
+                  theme={oneDark}
                   onChange={handleYamlChange}
                   editable={!submitting}
                   basicSetup={{
@@ -367,13 +350,6 @@ export function RouteForm({
                     crosshairCursor: true,
                     highlightActiveLine: true,
                     highlightSelectionMatches: true,
-                    closeBracketsKeymap: true,
-                    defaultKeymap: true,
-                    searchKeymap: true,
-                    historyKeymap: true,
-                    foldKeymap: true,
-                    completionKeymap: true,
-                    lintKeymap: true,
                   }}
                   className="text-sm"
                 />
