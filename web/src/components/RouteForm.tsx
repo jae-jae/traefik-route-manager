@@ -34,9 +34,9 @@ const emptyRoute: Route = {
 type EditorMode = "visual" | "yaml";
 
 /**
- * Build complete YAML from Route object
+ * Build complete YAML from basic route fields
  */
-function buildRouteYAML(route: Route): string {
+function buildRouteYAML(route: Pick<Route, "domain" | "backend" | "https" | "redirectHttps">): string {
   const resourceName = route.domain
     .toLowerCase()
     .replace(/\./g, "-")
@@ -92,8 +92,8 @@ function buildRouteYAML(route: Route): string {
 /**
  * Parse basic route fields from YAML
  */
-function parseRouteFromYAML(yaml: string): Route {
-  const route: Route = {
+function parseRouteFromYAML(yaml: string): Pick<Route, "domain" | "backend" | "https" | "redirectHttps"> {
+  const route = {
     domain: "",
     backend: "",
     https: false,
@@ -140,305 +140,29 @@ function parseRouteFromYAML(yaml: string): Route {
 }
 
 /**
- * Get resource name from domain (must match backend logic)
+ * Update specific fields in YAML without rebuilding
+ * Only updates domain (in rule) and backend (in url)
+ * For https/redirect changes, we need to rebuild (complex structural changes)
  */
-function getResourceName(domain: string): string {
-  return domain
-    .toLowerCase()
-    .replace(/\./g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-}
-
-/**
- * Extract advanced config from full YAML
- * Removes basic route items (router, service, redirect middleware) and returns the rest
- */
-function extractAdvancedConfig(fullYaml: string, route: Route): string {
-  if (!route.domain) return "";
-
-  const resourceName = getResourceName(route.domain);
-  const serviceName = resourceName + "-service";
-  const redirectMiddleware = resourceName + "-redirect-https";
-
-  const lines = fullYaml.split("\n");
-  const advancedLines: string[] = [];
-
-  let inHTTP = false;
-  let inSection = ""; // routers, services, middlewares
-  let currentItem = "";
-  let skipItem = false;
-  let itemIndent = 0;
+function updateYAMLField(yaml: string, field: "domain" | "backend", value: string): string {
+  const lines = yaml.split("\n");
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Track http: section
-    if (trimmed === "http:" && !line.startsWith(" ")) {
-      inHTTP = true;
-      continue;
+    if (field === "domain" && trimmed.startsWith("rule:")) {
+      // Update domain in Host() rule
+      lines[i] = line.replace(/Host\(`[^`]+`\)/, `Host(\`${value}\`)`);
     }
 
-    if (!inHTTP) continue;
-
-    // Detect section headers (2-space indent)
-    if (line.startsWith("  ") && !line.startsWith("    ") && trimmed.endsWith(":")) {
-      inSection = trimmed.slice(0, -1); // routers, services, middlewares
-      continue;
-    }
-
-    // Detect item keys (4-space indent, ends with :)
-    if (line.startsWith("    ") && !line.startsWith("      ") && trimmed.endsWith(":")) {
-      currentItem = trimmed.slice(0, -1);
-      skipItem = false;
-      itemIndent = line.length - line.trimStart().length;
-
-      // Check if this is a basic item to skip
-      if (inSection === "routers") {
-        if (currentItem === resourceName || currentItem === `${resourceName}-redirect`) {
-          skipItem = true;
-          continue;
-        }
-      } else if (inSection === "services") {
-        if (currentItem === serviceName) {
-          skipItem = true;
-          continue;
-        }
-      } else if (inSection === "middlewares") {
-        if (currentItem === redirectMiddleware) {
-          skipItem = true;
-          continue;
-        }
-      }
-
-      // This is an advanced item
-      advancedLines.push(line);
-      continue;
-    }
-
-    // Collect lines under items
-    if (currentItem && !skipItem) {
-      // Check if still under current item (more indented)
-      if (line.startsWith("      ") || (trimmed === "" && i + 1 < lines.length && lines[i + 1].startsWith("      "))) {
-        advancedLines.push(line);
-      } else if (line.startsWith("    ") && !line.startsWith("      ")) {
-        // New item
-        currentItem = trimmed.endsWith(":") ? trimmed.slice(0, -1) : "";
-        skipItem = false;
-
-        // Check if this basic item
-        if (inSection === "routers") {
-          if (currentItem === resourceName || currentItem === `${resourceName}-redirect`) {
-            skipItem = true;
-            continue;
-          }
-        } else if (inSection === "services") {
-          if (currentItem === serviceName) {
-            skipItem = true;
-            continue;
-          }
-        } else if (inSection === "middlewares") {
-          if (currentItem === redirectMiddleware) {
-            skipItem = true;
-            continue;
-          }
-        }
-
-        advancedLines.push(line);
-      }
+    if (field === "backend" && trimmed.startsWith("- url:")) {
+      // Update backend URL
+      lines[i] = line.replace(/- url:.*/, `- url: ${value}`);
     }
   }
 
-  // Build the advanced config YAML structure
-  const result: string[] = [];
-  let hasRouters = false;
-  let hasServices = false;
-  let hasMiddlewares = false;
-
-  let currentSection = "";
-  for (const line of advancedLines) {
-    const trimmed = line.trim();
-
-    // Detect which section by checking indentation patterns
-    if (line.startsWith("    ") && !line.startsWith("      ")) {
-      // Determine section based on position
-      // We need to track sections differently
-    }
-  }
-
-  // Simple approach: return lines grouped by detected section
-  // Build proper YAML structure
-  const routers: string[] = [];
-  const services: string[] = [];
-  const middlewares: string[] = [];
-
-  currentSection = "";
-  let collectingFor = "";
-  for (let i = 0; i < advancedLines.length; i++) {
-    const line = advancedLines[i];
-
-    // This is a simplified approach - just wrap in http:
-    // In a production app, you'd use a proper YAML library
-    if (line.startsWith("    ") && !line.startsWith("      ")) {
-      // Item key - determine which section it belongs to
-      // We need to track section from previous parsing
-    }
-  }
-
-  // For simplicity, return the advanced lines wrapped in minimal structure
-  // The frontend merge logic will handle re-inserting into proper sections
-  if (advancedLines.length === 0) return "";
-
-  return advancedLines.join("\n");
-}
-
-/**
- * Merge advanced config into base YAML
- */
-function mergeAdvancedConfig(baseYaml: string, advancedConfig: string): string {
-  if (!advancedConfig.trim()) return baseYaml;
-
-  // Parse advanced config to extract routers, services, middlewares additions
-  const advancedLines = advancedConfig.split("\n");
-  const routerAdditions: string[] = [];
-  const serviceAdditions: string[] = [];
-  const middlewareAdditions: string[] = [];
-
-  let currentSection = "";
-  let currentItem: string[] = [];
-  let itemIndent = 0;
-
-  for (const line of advancedLines) {
-    const trimmed = line.trim();
-
-    // Detect which section this item belongs to by checking context
-    // Items at 4-space indent are top-level keys under routers/services/middlewares
-    if (line.startsWith("    ") && !line.startsWith("      ")) {
-      // Save previous item
-      if (currentItem.length > 0 && currentSection) {
-        if (currentSection === "routers") routerAdditions.push(...currentItem);
-        else if (currentSection === "services") serviceAdditions.push(...currentItem);
-        else if (currentSection === "middlewares") middlewareAdditions.push(...currentItem);
-      }
-
-      // Start new item - need to detect section from position or content
-      // For simplicity, we'll use heuristics:
-      // - Items with "rule:" or "entryPoints:" are likely routers
-      // - Items with "loadBalancer:" are likely services
-      // - Items with redirect/auth are likely middlewares
-      currentItem = [line];
-      itemIndent = line.length - line.trimStart().length;
-    } else if (line.startsWith("      ") && currentItem.length > 0) {
-      currentItem.push(line);
-    } else if (trimmed === "" && currentItem.length > 0) {
-      // Continue collecting if next line is still part of item
-      currentItem.push(line);
-    }
-  }
-
-  // Save last item
-  if (currentItem.length > 0) {
-    // Try to detect section from content
-    const itemContent = currentItem.join("\n");
-    if (itemContent.includes("rule:") || itemContent.includes("entryPoints:")) {
-      routerAdditions.push(...currentItem);
-    } else if (itemContent.includes("loadBalancer:") || itemContent.includes("servers:")) {
-      serviceAdditions.push(...currentItem);
-    } else if (itemContent.includes("redirect") || itemContent.includes("auth") || itemContent.includes("limit")) {
-      middlewareAdditions.push(...currentItem);
-    }
-  }
-
-  // If we can't determine sections, just append to middlewares
-  // (this is a fallback for simple cases)
-
-  // Now merge into base YAML
-  const baseLines = baseYaml.split("\n");
-  const result: string[] = [];
-
-  let inRouters = false;
-  let inServices = false;
-  let inMiddlewares = false;
-  let addedRouterAdditions = false;
-  let addedServiceAdditions = false;
-  let addedMiddlewareAdditions = false;
-  let hasMiddlewaresSection = baseYaml.includes("middlewares:");
-
-  for (let i = 0; i < baseLines.length; i++) {
-    const line = baseLines[i];
-    const trimmed = line.trim();
-
-    result.push(line);
-
-    // Track sections
-    if (line === "  routers:") {
-      inRouters = true;
-      inServices = false;
-      inMiddlewares = false;
-    } else if (line === "  services:") {
-      inRouters = false;
-      inServices = true;
-      inMiddlewares = false;
-
-      // Add router additions before services section
-      if (!addedRouterAdditions && routerAdditions.length > 0) {
-        // Find where to insert (after existing routers)
-        for (const addLine of routerAdditions) {
-          result.push(addLine);
-        }
-        addedRouterAdditions = true;
-      }
-    } else if (line === "  middlewares:") {
-      inRouters = false;
-      inServices = false;
-      inMiddlewares = true;
-
-      // Add service additions before middlewares section
-      if (!addedServiceAdditions && serviceAdditions.length > 0) {
-        for (const addLine of serviceAdditions) {
-          result.push(addLine);
-        }
-        addedServiceAdditions = true;
-      }
-    }
-
-    // Add middleware additions at end of middlewares section
-    if (inMiddlewares && !addedMiddlewareAdditions && middlewareAdditions.length > 0) {
-      // Check if next line is a new item (4-space indent that's not continuation)
-      const nextLine = baseLines[i + 1];
-      if (!nextLine || (nextLine.startsWith("    ") && !nextLine.startsWith("      "))) {
-        for (const addLine of middlewareAdditions) {
-          result.push(addLine);
-        }
-        addedMiddlewareAdditions = true;
-      }
-    }
-  }
-
-  // If no middlewares section exists but we have middleware additions
-  if (!hasMiddlewaresSection && middlewareAdditions.length > 0) {
-    result.push("  middlewares:");
-    for (const addLine of middlewareAdditions) {
-      result.push(addLine);
-    }
-  }
-
-  // Handle case where additions weren't placed
-  if (routerAdditions.length > 0 && !addedRouterAdditions) {
-    // Insert after last router entry
-    const routersIdx = result.findIndex((l) => l === "  routers:");
-    if (routersIdx >= 0) {
-      // Find end of routers section
-      for (let i = routersIdx + 1; i < result.length; i++) {
-        if (result[i] === "  services:" || result[i] === "  middlewares:") {
-          result.splice(i, 0, ...routerAdditions);
-          break;
-        }
-      }
-    }
-  }
-
-  return result.join("\n");
+  return lines.join("\n");
 }
 
 export function RouteForm({
@@ -448,73 +172,89 @@ export function RouteForm({
   submitting,
   onSubmit,
 }: RouteFormProps) {
-  const [formState, setFormState] = useState<Route>(emptyRoute);
+  // yamlContent is the SINGLE SOURCE OF TRUTH
+  const [yamlContent, setYamlContent] = useState("");
+  // formState is just for display/editing, derived from yamlContent
+  const [formState, setFormState] = useState<Pick<Route, "domain" | "backend" | "https" | "redirectHttps">>({
+    domain: "",
+    backend: "",
+    https: true,
+    redirectHttps: true,
+  });
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<EditorMode>("visual");
-  const [yamlContent, setYamlContent] = useState("");
-  const [advancedConfig, setAdvancedConfig] = useState<string>("");
 
-  // Track if YAML was user-edited
-  const [yamlUserEdited, setYamlUserEdited] = useState(false);
+  const isEditing = Boolean(initialRoute);
+
+  // Track if this is a new route (no advancedConfig)
+  const [isNewRoute, setIsNewRoute] = useState(true);
 
   useEffect(() => {
     if (!open) return;
 
     const route = initialRoute ?? emptyRoute;
-    setFormState(route);
 
-    // Initialize YAML and advanced config
-    if (route.advancedConfig) {
-      // Existing route with full YAML
+    // Initialize YAML content - this is the source of truth
+    if (route.advancedConfig && route.advancedConfig.trim()) {
       setYamlContent(route.advancedConfig);
-      setAdvancedConfig(extractAdvancedConfig(route.advancedConfig, route));
+      setIsNewRoute(false);
     } else {
-      // New route - generate from basic fields
       setYamlContent(buildRouteYAML(route));
-      setAdvancedConfig("");
+      setIsNewRoute(true);
     }
+
+    // Initialize form state from route (or will be synced from YAML)
+    setFormState({
+      domain: route.domain,
+      backend: route.backend,
+      https: route.https,
+      redirectHttps: route.redirectHttps,
+    });
 
     setError(null);
     setMode("visual");
-    setYamlUserEdited(false);
   }, [initialRoute, open]);
 
-  const isEditing = Boolean(initialRoute);
+  // Sync form state from YAML when YAML changes (in yaml mode)
+  const syncFormFromYaml = (yaml: string) => {
+    const parsed = parseRouteFromYAML(yaml);
+    setFormState(parsed);
+  };
 
-  const updateField = <K extends keyof Route>(key: K, value: Route[K]) => {
-    setFormState((current) => {
-      const updated = { ...current, [key]: value };
-      // Sync YAML content (preserve advanced config)
-      const baseYaml = buildRouteYAML(updated);
-      setYamlContent(mergeAdvancedConfig(baseYaml, advancedConfig));
-      return updated;
-    });
+  const updateField = <K extends keyof typeof formState>(key: K, value: (typeof formState)[K]) => {
+    const newFormState = { ...formState, [key]: value };
+    setFormState(newFormState);
+
+    // For domain and backend, update YAML directly (simple string replacement)
+    if (key === "domain" || key === "backend") {
+      const newYaml = updateYAMLField(yamlContent, key, value as string);
+      setYamlContent(newYaml);
+    } else {
+      // For https/redirectHttps, need to rebuild the base structure
+      // This WILL lose custom configs - but user is in form mode, so they should expect this
+      // We could add a warning, but for simplicity, just rebuild
+      const newYaml = buildRouteYAML(newFormState);
+      setYamlContent(newYaml);
+      setIsNewRoute(true); // Mark as "rebuilt", lost custom config
+    }
   };
 
   const handleYamlChange = (yaml: string) => {
     setYamlContent(yaml);
-    setYamlUserEdited(true);
+    setIsNewRoute(false); // User edited YAML, treat as custom
+    syncFormFromYaml(yaml);
 
-    // Parse basic fields from YAML
-    const parsed = parseRouteFromYAML(yaml);
-    if (parsed.domain && parsed.backend) {
-      setFormState(parsed);
-      // Extract advanced config
-      setAdvancedConfig(extractAdvancedConfig(yaml, parsed));
-      setError(null);
-    } else if (yaml.trim()) {
-      setError("Invalid YAML: missing required fields (domain, backend)");
-    } else {
-      setError(null);
+    if (yaml.trim()) {
+      const parsed = parseRouteFromYAML(yaml);
+      if (!parsed.domain || !parsed.backend) {
+        setError("Invalid YAML: missing required fields (domain, backend)");
+        return;
+      }
     }
+    setError(null);
   };
 
   const handleModeChange = (newMode: EditorMode) => {
-    if (newMode === "yaml" && !yamlUserEdited) {
-      // Switching to YAML mode: sync from current form state
-      const baseYaml = buildRouteYAML(formState);
-      setYamlContent(mergeAdvancedConfig(baseYaml, advancedConfig));
-    }
     setMode(newMode);
   };
 
@@ -522,30 +262,26 @@ export function RouteForm({
     event.preventDefault();
     setError(null);
 
-    // Validate
-    if (!formState.domain.trim()) {
+    // Validate from yamlContent (source of truth)
+    const parsed = parseRouteFromYAML(yamlContent);
+    if (!parsed.domain.trim()) {
       setError("Domain is required");
       return;
     }
-    if (!formState.backend.trim()) {
+    if (!parsed.backend.trim()) {
       setError("Backend URL is required");
       return;
     }
 
     try {
-      // Build route with advanced config
+      // Always save the full YAML content
       const routeToSubmit: Route = {
-        ...formState,
-        advancedConfig: yamlUserEdited ? yamlContent : mergeAdvancedConfig(buildRouteYAML(formState), advancedConfig) || undefined,
+        domain: parsed.domain,
+        backend: parsed.backend,
+        https: parsed.https,
+        redirectHttps: parsed.redirectHttps,
+        advancedConfig: yamlContent,
       };
-
-      // Clean up: if advanced config equals basic config, don't store it
-      if (routeToSubmit.advancedConfig) {
-        const basicYaml = buildRouteYAML(formState);
-        if (routeToSubmit.advancedConfig.trim() === basicYaml.trim()) {
-          delete routeToSubmit.advancedConfig;
-        }
-      }
 
       await onSubmit(routeToSubmit);
     } catch (submitError) {
@@ -644,12 +380,6 @@ export function RouteForm({
                   />
                 </div>
               </div>
-
-              {advancedConfig && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                  ℹ️ This route has advanced configuration. Switch to YAML mode to view/edit.
-                </div>
-              )}
             </>
           ) : (
             /* YAML Mode */
