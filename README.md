@@ -31,6 +31,8 @@ Traefik's file provider is powerful but editing YAML files manually is tedious. 
 
 - 🗂️ **One domain, one file** - Routes stored as `trm-{domain}.yml` in your config directory
 - 🔐 **HTTPS & redirects** - Toggle HTTPS and HTTP→HTTPS redirects per route
+- 📝 **YAML editor** - Switch between form and YAML modes, with syntax highlighting and line numbers
+- 🔧 **Advanced config** - Add custom middlewares, health checks, and other Traefik features via YAML
 - 🤖 **AI Agent ready** - Built-in skill for AI assistants to manage routes via natural language
 - 🪶 **Single binary** - Go backend + embedded React frontend, ~15MB image
 - 🔑 **Token auth** - Simple shared-token authentication
@@ -144,6 +146,17 @@ http:
         scheme: https
         permanent: true
 ```
+
+## Advanced Configuration
+
+The YAML editor allows you to add custom Traefik features beyond the basic form:
+
+- **Custom middlewares** - Rate limiting, authentication, headers, etc.
+- **Health checks** - Backend health monitoring
+- **Multiple routers** - Advanced routing rules
+- **Additional services** - Load balancing across multiple backends
+
+Switch to **YAML mode** in the route editor to access the full Traefik configuration. Changes to basic fields (domain, backend, HTTPS) sync with the form, while custom configurations are preserved.
 
 ## Local Development
 
