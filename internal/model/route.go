@@ -10,10 +10,14 @@ import (
 var domainPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$`)
 
 type Route struct {
-	Domain        string `json:"domain"`
-	Backend       string `json:"backend"`
-	HTTPS         bool   `json:"https"`
-	RedirectHTTPS bool   `json:"redirectHttps"`
+	Domain        string  `json:"domain"`
+	Backend       string  `json:"backend"`
+	HTTPS         bool    `json:"https"`
+	RedirectHTTPS bool    `json:"redirectHttps"`
+	// AdvancedConfig stores additional YAML configuration that will be merged
+	// with the basic route config. This allows users to add custom middlewares,
+	// health checks, and other Traefik features.
+	AdvancedConfig *string `json:"advancedConfig,omitempty"`
 }
 
 func (r Route) Validate() error {
@@ -45,6 +49,7 @@ func (r Route) Validate() error {
 func (r Route) Normalized() Route {
 	r.Domain = strings.ToLower(strings.TrimSpace(r.Domain))
 	r.Backend = strings.TrimSpace(r.Backend)
+	// Preserve AdvancedConfig as-is
 	return r
 }
 
