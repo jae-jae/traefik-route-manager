@@ -159,11 +159,32 @@ func (s *RouteService) routeFilePath(domain string) string {
 	return filepath.Join(s.configDir, filePrefix+domain+".yml")
 }
 
+// validateAdvancedConfig checks if the advanced YAML config is valid and contains
+// required fields (at least one backend URL). Returns an error if invalid.
+func validateAdvancedConfig(yamlStr string) error {
+	hasBackend := false
+	for _, line := range strings.Split(yamlStr, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- url:") || strings.HasPrefix(trimmed, "url:") {
+			hasBackend = true
+			break
+		}
+	}
+	if !hasBackend {
+		return errors.New("advancedConfig must contain at least one backend server URL")
+	}
+	return nil
+}
+
 func (s *RouteService) writeRouteFile(path string, route model.Route) error {
 	// Build YAML: if AdvancedConfig is provided, use it as-is (frontend handles merging)
 	// Otherwise, generate from basic fields
 	var content string
 	if route.AdvancedConfig != nil && strings.TrimSpace(*route.AdvancedConfig) != "" {
+		// Validate the advanced config before writing
+		if err := validateAdvancedConfig(*route.AdvancedConfig); err != nil {
+			return ValidationError{Err: err}
+		}
 		content = *route.AdvancedConfig
 	} else {
 		content = buildRouteYAML(route)
