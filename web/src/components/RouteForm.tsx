@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { Code2, FormInput } from "lucide-react";
+import CodeMirror from "@uiw/react-codemirror";
+import { yaml } from "@codemirror/lang-yaml";
+import { createTheme } from "@uiw/codemirror-themes";
 
 import type { Route } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,23 @@ const emptyRoute: Route = {
 };
 
 type EditorMode = "visual" | "yaml";
+
+// Dark theme for YAML editor
+const yamlTheme = createTheme({
+  theme: "dark",
+  settings: {
+    background: "#0f172a",
+    foreground: "#e2e8f0",
+    caret: "#f8fafc",
+    selection: "#334155",
+    selectionMatch: "#334155",
+    lineHighlight: "#1e293b",
+    gutterBackground: "#0f172a",
+    gutterForeground: "#64748b",
+    gutterActiveForeground: "#94a3b8",
+  },
+  styles: [],
+});
 
 /**
  * Build Traefik YAML config from Route object (matches backend logic)
@@ -104,7 +123,7 @@ function parseRouteYAML(yaml: string): Route | null {
     // Extract domain from rule
     for (const line of lines) {
       const trimmed = line.trim();
-      if (trimmed.startsWith('rule:')) {
+      if (trimmed.startsWith("rule:")) {
         const match = trimmed.match(/Host\(`([^`]+)`\)/);
         if (match) {
           route.domain = match[1];
@@ -187,8 +206,10 @@ export function RouteForm({
     if (parsed) {
       setFormState(parsed);
       setError(null);
+    } else if (yaml.trim()) {
+      setError("Invalid YAML: missing required fields (domain, backend)");
     } else {
-      setError("Invalid YAML format or missing required fields");
+      setError(null);
     }
   };
 
@@ -196,6 +217,7 @@ export function RouteForm({
     if (newMode === "yaml") {
       // Switching to YAML mode: sync current form state
       setYamlContent(buildRouteYAML(formState));
+      setError(null);
     }
     setMode(newMode);
   };
@@ -217,7 +239,9 @@ export function RouteForm({
     try {
       await onSubmit(formState);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Request failed");
+      setError(
+        submitError instanceof Error ? submitError.message : "Request failed",
+      );
     }
   };
 
@@ -225,36 +249,36 @@ export function RouteForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Route" : "New Route"}</DialogTitle>
-        </DialogHeader>
+          <div className="flex items-center justify-between pr-8">
+            <DialogTitle>{isEditing ? "Edit Route" : "New Route"}</DialogTitle>
 
-        {/* Mode Toggle */}
-        <div className="flex items-center justify-center gap-1 rounded-lg bg-slate-100 p-1">
-          <button
-            type="button"
-            onClick={() => handleModeChange("visual")}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              mode === "visual"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <FormInput className="h-4 w-4" />
-            Visual
-          </button>
-          <button
-            type="button"
-            onClick={() => handleModeChange("yaml")}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              mode === "yaml"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <Code2 className="h-4 w-4" />
-            YAML
-          </button>
-        </div>
+            {/* Mode Toggle - Clean Pill Style */}
+            <div className="flex items-center rounded-full border border-slate-200 bg-slate-50 p-0.5">
+              <button
+                type="button"
+                onClick={() => handleModeChange("visual")}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  mode === "visual"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Form
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange("yaml")}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  mode === "yaml"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                YAML
+              </button>
+            </div>
+          </div>
+        </DialogHeader>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           {mode === "visual" ? (
@@ -284,7 +308,7 @@ export function RouteForm({
                 />
               </div>
 
-              <div className="space-y-3 rounded-xl border border-border bg-slate-50/70 p-4">
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <Label htmlFor="https">HTTPS</Label>
                   <Switch
@@ -314,44 +338,65 @@ export function RouteForm({
           ) : (
             /* YAML Mode */
             <div className="space-y-2">
-              <Label htmlFor="yaml">YAML Configuration</Label>
-              <textarea
-                id="yaml"
-                value={yamlContent}
-                onChange={(event) => handleYamlChange(event.target.value)}
-                disabled={submitting}
-                className="h-64 w-full rounded-lg border border-slate-200 bg-slate-900 p-3 font-mono text-sm text-slate-100 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400/20 disabled:opacity-50"
-                placeholder="http:
-  routers:
-    ..."
-                spellCheck={false}
-              />
-              <p className="text-xs text-slate-500">
-                Edit the YAML directly. Changes sync with visual mode.
-              </p>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="yaml">Configuration</Label>
+                <span className="text-xs text-slate-400">Traefik YAML</span>
+              </div>
+              <div className="overflow-hidden rounded-lg border border-slate-700">
+                <CodeMirror
+                  value={yamlContent}
+                  height="280px"
+                  extensions={[yaml()]}
+                  theme={yamlTheme}
+                  onChange={handleYamlChange}
+                  editable={!submitting}
+                  basicSetup={{
+                    lineNumbers: true,
+                    highlightActiveLineGutter: true,
+                    highlightSpecialChars: true,
+                    history: true,
+                    foldGutter: true,
+                    drawSelection: true,
+                    dropCursor: true,
+                    allowMultipleSelections: true,
+                    indentOnInput: true,
+                    bracketMatching: true,
+                    closeBrackets: true,
+                    autocompletion: true,
+                    rectangularSelection: true,
+                    crosshairCursor: true,
+                    highlightActiveLine: true,
+                    highlightSelectionMatches: true,
+                    closeBracketsKeymap: true,
+                    defaultKeymap: true,
+                    searchKeymap: true,
+                    historyKeymap: true,
+                    foldKeymap: true,
+                    completionKeymap: true,
+                    lintKeymap: true,
+                  }}
+                  className="text-sm"
+                />
+              </div>
             </div>
           )}
 
           {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
               {error}
             </div>
           ) : null}
 
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
+              type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={submitting}
-              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={submitting}
-              className="w-full sm:w-auto"
-            >
+            <Button type="submit" disabled={submitting}>
               {submitting ? "Saving..." : isEditing ? "Save" : "Create"}
             </Button>
           </DialogFooter>
