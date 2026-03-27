@@ -792,7 +792,7 @@ export function RouteForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-xl" onInteractOutside={() => {}}>
         <DialogHeader>
           <div className="flex items-center justify-between pr-8">
             <DialogTitle>{isEditing ? "Edit Route" : "New Route"}</DialogTitle>
