@@ -35,7 +35,10 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 export function DialogContent({
   className,
   children,
-}: React.HTMLAttributes<HTMLDivElement>) {
+  onInteractOutside,
+}: React.HTMLAttributes<HTMLDivElement> & {
+  onInteractOutside?: (event: MouseEvent) => void;
+}) {
   const { open, onOpenChange } = useDialogContext();
 
   React.useEffect(() => {
@@ -57,10 +60,18 @@ export function DialogContent({
     return null;
   }
 
+  const handleInteractOutside = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (onInteractOutside) {
+      onInteractOutside(event.nativeEvent);
+    } else {
+      onOpenChange(false);
+    }
+  };
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-4 backdrop-blur-sm sm:items-center"
-      onClick={() => onOpenChange(false)}
+      onClick={handleInteractOutside}
     >
       <div
         className={cn(

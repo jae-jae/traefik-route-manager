@@ -3,6 +3,7 @@ export interface Route {
   backend: string;
   https: boolean;
   redirectHttps: boolean;
+  advancedConfig?: string;
 }
 
 export interface RouteListResponse {
@@ -18,7 +19,11 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  token?: string,
+): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
   if (token) {
