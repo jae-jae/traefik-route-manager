@@ -40,14 +40,14 @@ function buildRouteYAML(route: Pick<Route, "domain" | "backend" | "https" | "red
   const resourceName = route.domain
     .toLowerCase()
     .replace(/\./g, "-")
-    .replace(/[^a-z0-9-]/g, "");
+    .replace(/[^a-z0-9-]/g, "") || "route";
   const serviceName = resourceName + "-service";
 
   const lines: string[] = ["http:", "  routers:"];
 
   // Main router
   lines.push(`    ${resourceName}:`);
-  lines.push(`      rule: "Host(\`${route.domain}\`)"`);
+  lines.push(`      rule: "Host(\`${route.domain || "example.com"}\`)"`);
   lines.push(`      service: ${serviceName}`);
   lines.push("      entryPoints:");
   if (route.https) {
@@ -61,7 +61,7 @@ function buildRouteYAML(route: Pick<Route, "domain" | "backend" | "https" | "red
   if (route.redirectHttps) {
     const middlewareName = resourceName + "-redirect-https";
     lines.push(`    ${resourceName}-redirect:`);
-    lines.push(`      rule: "Host(\`${route.domain}\`)"`);
+    lines.push(`      rule: "Host(\`${route.domain || "example.com"}\`)"`);
     lines.push(`      service: ${serviceName}`);
     lines.push("      entryPoints:");
     lines.push("        - web");
@@ -74,7 +74,7 @@ function buildRouteYAML(route: Pick<Route, "domain" | "backend" | "https" | "red
   lines.push(`    ${serviceName}:`);
   lines.push("      loadBalancer:");
   lines.push("        servers:");
-  lines.push(`          - url: ${route.backend}`);
+  lines.push(`          - url: ${route.backend || "http://127.0.0.1:8080"}`);
 
   // Middleware (if HTTPS redirect enabled)
   if (route.redirectHttps) {
@@ -140,12 +140,46 @@ function parseRouteFromYAML(yaml: string): Pick<Route, "domain" | "backend" | "h
 }
 
 /**
- * Update specific fields in YAML without rebuilding
- * Only updates domain (in rule) and backend (in url)
- * For https/redirect changes, we need to rebuild (complex structural changes)
+ * Check if YAML has custom config beyond basic router/service
+ */
+function hasCustomConfig(yaml: string): boolean {
+  // Count lines beyond basic structure
+  // Basic structure has: routers (1), services (1), middlewares for redirect (optional)
+  // Custom config adds extra routers, services, middlewares, or other sections
+  
+  const lines = yaml.split("\n");
+  let routerCount = 0;
+  let serviceCount = 0;
+  let middlewareCount = 0;
+  let hasExtraSections = false;
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    
+    // Count routers
+    if (line.startsWith("    ") && !line.startsWith("      ") && trimmed.endsWith(":")) {
+      // This is a router/service/middleware name
+      // Need to determine which section we're in
+    }
+    
+    // Check for extra sections beyond http:
+    if (trimmed === "tcp:" || trimmed === "udp:") {
+      hasExtraSections = true;
+    }
+  }
+  
+  // Simple heuristic: if YAML is significantly longer than basic template, it has custom config
+  // A basic route is ~15-25 lines
+  const basicLineCount = 25;
+  return yaml.split("\n").length > basicLineCount || hasExtraSections;
+}
+
+/**
+ * Update specific fields in YAML without full rebuild
  */
 function updateYAMLField(yaml: string, field: "domain" | "backend", value: string): string {
   const lines = yaml.split("\n");
+  let updated = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -153,16 +187,24 @@ function updateYAMLField(yaml: string, field: "domain" | "backend", value: strin
 
     if (field === "domain" && trimmed.startsWith("rule:")) {
       // Update domain in Host() rule
-      lines[i] = line.replace(/Host\(`[^`]+`\)/, `Host(\`${value}\`)`);
+      const newLine = line.replace(/Host\(`[^`]*`\)/, `Host(\`${value}\`)`);
+      if (newLine !== line) {
+        lines[i] = newLine;
+        updated = true;
+      }
     }
 
     if (field === "backend" && trimmed.startsWith("- url:")) {
       // Update backend URL
-      lines[i] = line.replace(/- url:.*/, `- url: ${value}`);
+      const newLine = line.replace(/- url:.*/, `- url: ${value}`);
+      if (newLine !== line) {
+        lines[i] = newLine;
+        updated = true;
+      }
     }
   }
 
-  return lines.join("\n");
+  return updated ? lines.join("\n") : yaml;
 }
 
 export function RouteForm({
@@ -186,8 +228,8 @@ export function RouteForm({
 
   const isEditing = Boolean(initialRoute);
 
-  // Track if this is a new route (no advancedConfig)
-  const [isNewRoute, setIsNewRoute] = useState(true);
+  // Track if YAML has been customized (has advanced config)
+  const [hasCustomYaml, setHasCustomYaml] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -197,13 +239,13 @@ export function RouteForm({
     // Initialize YAML content - this is the source of truth
     if (route.advancedConfig && route.advancedConfig.trim()) {
       setYamlContent(route.advancedConfig);
-      setIsNewRoute(false);
+      setHasCustomYaml(true);
     } else {
       setYamlContent(buildRouteYAML(route));
-      setIsNewRoute(true);
+      setHasCustomYaml(false);
     }
 
-    // Initialize form state from route (or will be synced from YAML)
+    // Initialize form state from route
     setFormState({
       domain: route.domain,
       backend: route.backend,
@@ -215,7 +257,7 @@ export function RouteForm({
     setMode("visual");
   }, [initialRoute, open]);
 
-  // Sync form state from YAML when YAML changes (in yaml mode)
+  // Sync form state from YAML when YAML changes
   const syncFormFromYaml = (yaml: string) => {
     const parsed = parseRouteFromYAML(yaml);
     setFormState(parsed);
@@ -225,23 +267,25 @@ export function RouteForm({
     const newFormState = { ...formState, [key]: value };
     setFormState(newFormState);
 
-    // For domain and backend, update YAML directly (simple string replacement)
-    if (key === "domain" || key === "backend") {
+    // Determine how to update YAML:
+    // - If has custom YAML: use string replacement (preserve custom config)
+    // - If no custom YAML: rebuild from form state (simpler, cleaner)
+    if (hasCustomYaml && (key === "domain" || key === "backend")) {
+      // Try to update via string replacement
       const newYaml = updateYAMLField(yamlContent, key, value as string);
       setYamlContent(newYaml);
     } else {
-      // For https/redirectHttps, need to rebuild the base structure
-      // This WILL lose custom configs - but user is in form mode, so they should expect this
-      // We could add a warning, but for simplicity, just rebuild
+      // Rebuild YAML (for https/redirect changes, or when no custom config)
       const newYaml = buildRouteYAML(newFormState);
       setYamlContent(newYaml);
-      setIsNewRoute(true); // Mark as "rebuilt", lost custom config
+      // If we rebuild, mark as no custom config
+      setHasCustomYaml(false);
     }
   };
 
   const handleYamlChange = (yaml: string) => {
     setYamlContent(yaml);
-    setIsNewRoute(false); // User edited YAML, treat as custom
+    setHasCustomYaml(true); // User edited YAML, treat as custom
     syncFormFromYaml(yaml);
 
     if (yaml.trim()) {
