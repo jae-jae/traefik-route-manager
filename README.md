@@ -17,6 +17,7 @@ A lightweight, database-free web UI for managing Traefik file provider routes. T
 
 ![Dashboard Screenshot](docs/screenshot.png)
 ![Dashboard Screenshot](docs/screenshot2.png)
+![Dashboard Screenshot](docs/screenshot3.png)
 
 ## Why This Exists
 

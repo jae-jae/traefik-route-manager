@@ -159,8 +159,36 @@ func (s *RouteService) routeFilePath(domain string) string {
 	return filepath.Join(s.configDir, filePrefix+domain+".yml")
 }
 
+// validateAdvancedConfig checks if the advanced YAML config is valid and contains
+// required fields (at least one backend URL). Returns an error if invalid.
+func validateAdvancedConfig(yamlStr string) error {
+	hasBackend := false
+	for _, line := range strings.Split(yamlStr, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- url:") || strings.HasPrefix(trimmed, "url:") {
+			hasBackend = true
+			break
+		}
+	}
+	if !hasBackend {
+		return errors.New("advancedConfig must contain at least one backend server URL")
+	}
+	return nil
+}
+
 func (s *RouteService) writeRouteFile(path string, route model.Route) error {
-	content := []byte(buildRouteYAML(route))
+	// Build YAML: if AdvancedConfig is provided, use it as-is (frontend handles merging)
+	// Otherwise, generate from basic fields
+	var content string
+	if route.AdvancedConfig != nil && strings.TrimSpace(*route.AdvancedConfig) != "" {
+		// Validate the advanced config before writing
+		if err := validateAdvancedConfig(*route.AdvancedConfig); err != nil {
+			return ValidationError{Err: err}
+		}
+		content = *route.AdvancedConfig
+	} else {
+		content = buildRouteYAML(route)
+	}
 
 	tempFile, err := os.CreateTemp(s.configDir, "route-*.yml")
 	if err != nil {
@@ -172,7 +200,7 @@ func (s *RouteService) writeRouteFile(path string, route model.Route) error {
 		_ = os.Remove(tempName)
 	}()
 
-	if _, err := tempFile.Write(content); err != nil {
+	if _, err := tempFile.WriteString(content); err != nil {
 		_ = tempFile.Close()
 		return fmt.Errorf("write temp route file: %w", err)
 	}
@@ -198,7 +226,13 @@ func (s *RouteService) readRouteFromFile(path string) (model.Route, error) {
 	domain := strings.TrimPrefix(filename, filePrefix)
 	route := model.Route{Domain: domain}
 
-	for _, line := range strings.Split(string(content), "\n") {
+	yamlStr := string(content)
+
+	// Store full YAML as AdvancedConfig so frontend can preserve all customizations
+	route.AdvancedConfig = &yamlStr
+
+	// Extract basic fields for form display
+	for _, line := range strings.Split(yamlStr, "\n") {
 		trimmed := strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(trimmed, "- url:"):
